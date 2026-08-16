@@ -93,6 +93,28 @@ class RtConfigTest {
     }
 
     @Test
+    void speedPresetsPreserveConfigOrder() {
+        // The Train Wrench cycles presets in the order they appear in config.yml,
+        // so the snapshot must preserve YAML insertion order.
+        RtConfig config = RtConfig.from(yaml("""
+                speed-presets:
+                  crawl: 0.25
+                  slow: 0.5
+                  cruise: 1.0
+                  fast: 1.2
+                """));
+        assertEquals(java.util.List.of("crawl", "slow", "cruise", "fast"),
+                java.util.List.copyOf(config.speedPresets().keySet()));
+    }
+
+    @Test
+    void defaultSpeedPresetsOrderSlowThenCruise() {
+        RtConfig config = RtConfig.from(yaml(""));
+        assertEquals(java.util.List.of("slow", "cruise"),
+                java.util.List.copyOf(config.speedPresets().keySet()));
+    }
+
+    @Test
     void rejectsCapAboveOne() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> RtConfig.from(yaml("speed:\n  cap: 1.5\n")));

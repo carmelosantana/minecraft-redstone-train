@@ -10,6 +10,7 @@
  */
 package org.xpfarm.redstonetrain.config;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
@@ -63,9 +64,13 @@ public record RtConfig(
         boolean bossbarEnabled,
         Map<String, Double> speedPresets) {
 
-    /** Defensive copy so the record is deeply immutable regardless of the map passed in. */
+    /**
+     * Defensive copy so the record is deeply immutable regardless of the map passed in.
+     * The copy preserves iteration order ({@code Map.copyOf} would not): the Train
+     * Wrench cycles presets in the order they appear in {@code config.yml}.
+     */
     public RtConfig {
-        speedPresets = Map.copyOf(speedPresets);
+        speedPresets = Collections.unmodifiableMap(new LinkedHashMap<>(speedPresets));
     }
 
     /**
@@ -130,7 +135,10 @@ public record RtConfig(
     private static Map<String, Double> readSpeedPresets(ConfigurationSection root) {
         ConfigurationSection section = root.getConfigurationSection("speed-presets");
         if (section == null) {
-            return Map.of("slow", 0.5, "cruise", 1.0);
+            Map<String, Double> defaults = new LinkedHashMap<>();
+            defaults.put("slow", 0.5);
+            defaults.put("cruise", 1.0);
+            return defaults;
         }
         Map<String, Double> presets = new LinkedHashMap<>();
         for (String name : section.getKeys(false)) {
