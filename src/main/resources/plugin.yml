@@ -1,0 +1,21 @@
+name: RedstoneTrain
+version: '${project.version}'
+main: org.xpfarm.redstonetrain.RedstoneTrainPlugin
+api-version: '26.1'
+author: Carmelo Santana
+website: https://xpfarm.org
+description: Craftable self-propelled electric locomotive that couples vanilla minecarts into charge-powered trains
+
+commands:
+  redstonetrain:
+    description: Inspect and manage Redstone Train locomotives
+    usage: /redstonetrain <info | reload>
+    aliases: [rtrain]
+
+permissions:
+  redstonetrain.use:
+    description: Craft, place, ride, couple, and inspect Redstone Train locomotives
+    default: true
+  redstonetrain.admin:
+    description: Reload the RedstoneTrain configuration
+    default: op

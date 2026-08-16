@@ -1,0 +1,50 @@
+# Redstone Train configuration.
+# All speeds are in blocks per tick (multiply by 20 for blocks/second).
+# The vanilla minecart hard cap is 0.40 b/tick (8 b/s); keep speed.cap at or below it.
+
+speed:
+  # Absolute ceiling applied to every train member. Do not exceed 0.40 (8 b/s).
+  cap: 0.40
+  # Cruise speed of a lone locomotive with no cars (0.36 = 7.2 b/s, leaves catch-up headroom).
+  base-cruise: 0.36
+  # Number of coupled cars that incur no speed penalty.
+  free-cars: 2
+  # Speed subtracted per car beyond free-cars (0.02 = 0.4 b/s each).
+  penalty-per-car: 0.02
+  # Hard floor; an overloaded train never drops below this (0.10 = 2 b/s).
+  floor: 0.10
+
+capacity:
+  # Soft car limit. Beyond this the train still runs, just slower toward the floor.
+  soft-cap: 6
+
+boost:
+  # Speed added when the lead crosses an active powered rail (mirrors vanilla +0.06/tick).
+  powered-rail: 0.06
+  # Ticks over which the powered-rail boost decays back to cruise (60 = 3 s).
+  decay-ticks: 60
+
+charge:
+  # Charge meter range. ~500 blocks of travel at full with the defaults below.
+  max: 100.0
+  # Charge spent per block travelled.
+  drain-per-block: 0.2
+  # Charge a freshly crafted locomotive starts with.
+  craft-start: 50.0
+  # Charge added when right-clicking the loco with redstone dust in hand.
+  redstone-dust: 10.0
+  # Charge added when right-clicking the loco with a redstone block in hand.
+  redstone-block: 90.0
+  # Charge per second a parked loco gains while sitting on an active powered rail.
+  idle-trickle-per-second: 2.0
+  # Charge gained per block while moving over an active powered rail (tune to net-positive vs drain).
+  powered-rail-gain-per-block: 0.5
+
+display:
+  # Show a boss bar (charge % and speed) to riders.
+  bossbar-enabled: true
+
+# Speed presets the Train Wrench cycles through. Values are multipliers of the computed cruise speed.
+speed-presets:
+  slow: 0.5
+  cruise: 1.0
