@@ -14,7 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Map;
+import org.bukkit.block.data.Rail;
 import org.junit.jupiter.api.Test;
 import org.xpfarm.redstonetrain.config.RtConfig;
 import org.xpfarm.redstonetrain.model.ChargeModel;
@@ -39,20 +41,6 @@ class MovementControllerTest {
     private static RtConfig zeroedGuards() {
         return new RtConfig(0.40, 0.36, 2, 0.02, 0.10, 6, 0.06, 0, 0.0, 0.2, 0.0,
                 10.0, 90.0, 2.0, 0.5, true, Map.of("slow", 0.5, "cruise", 1.0));
-    }
-
-    // ------------------------------------------------------------ preset multiplier
-
-    @Test
-    void presetMultiplierResolvesKnownPreset() {
-        assertEquals(0.5, MovementController.presetMultiplier("slow", defaults()), EPS);
-        assertEquals(1.0, MovementController.presetMultiplier("cruise", defaults()), EPS);
-    }
-
-    @Test
-    void presetMultiplierFallsBackToOneForUnknownOrNullPreset() {
-        assertEquals(1.0, MovementController.presetMultiplier("warp", defaults()), EPS);
-        assertEquals(1.0, MovementController.presetMultiplier(null, defaults()), EPS);
     }
 
     // ------------------------------------------------------------ target speed
@@ -198,5 +186,65 @@ class MovementControllerTest {
     void facingFromVelocityIsNullAtRest() {
         assertNull(MovementController.facingFromVelocity(0.0, 0.0));
         assertNull(MovementController.facingFromVelocity(1e-6, -1e-6));
+    }
+
+    // -------------------------------------------- cold-start rail alignment
+
+    @Test
+    void railFacingsCoverEveryShapeWithTwoValidCardinals() {
+        for (Rail.Shape shape : Rail.Shape.values()) {
+            List<String> facings = MovementController.railFacings(shape);
+            assertEquals(2, facings.size(), shape.name());
+            for (String facing : facings) {
+                assertTrue(List.of("NORTH", "SOUTH", "EAST", "WEST").contains(facing),
+                        shape + " produced non-cardinal " + facing);
+            }
+        }
+    }
+
+    @Test
+    void railFacingsStraightShapesListBothAxisEnds() {
+        assertEquals(List.of("SOUTH", "NORTH"),
+                MovementController.railFacings(Rail.Shape.NORTH_SOUTH));
+        assertEquals(List.of("EAST", "WEST"),
+                MovementController.railFacings(Rail.Shape.EAST_WEST));
+    }
+
+    @Test
+    void alignFacingToRailKeepsAFacingAlreadyAlongTheRail() {
+        assertEquals("NORTH", MovementController.alignFacingToRail(
+                "NORTH", Rail.Shape.NORTH_SOUTH));
+        assertEquals("SOUTH", MovementController.alignFacingToRail(
+                "SOUTH", Rail.Shape.NORTH_SOUTH));
+        assertEquals("EAST", MovementController.alignFacingToRail(
+                "EAST", Rail.Shape.SOUTH_EAST));
+    }
+
+    @Test
+    void alignFacingToRailSnapsAPerpendicularFacingOntoTheAxis() {
+        // Player toggled the engine while facing across the track: depart along it.
+        assertEquals("SOUTH", MovementController.alignFacingToRail(
+                "EAST", Rail.Shape.NORTH_SOUTH));
+        assertEquals("EAST", MovementController.alignFacingToRail(
+                "NORTH", Rail.Shape.EAST_WEST));
+    }
+
+    @Test
+    void alignFacingToRailDerivesDeterministicDefaultWhenFacingUnknown() {
+        // The cold-start case: freshly placed loco, no LAST_FACING, straight rail.
+        assertEquals("SOUTH", MovementController.alignFacingToRail(
+                null, Rail.Shape.NORTH_SOUTH));
+        assertEquals("EAST", MovementController.alignFacingToRail(
+                null, Rail.Shape.EAST_WEST));
+        assertEquals("SOUTH", MovementController.alignFacingToRail(
+                null, Rail.Shape.SOUTH_WEST));
+        assertEquals("WEST", MovementController.alignFacingToRail(
+                null, Rail.Shape.ASCENDING_WEST));
+    }
+
+    @Test
+    void alignFacingToRailOffRailKeepsWhateverFacingExists() {
+        assertEquals("NORTH", MovementController.alignFacingToRail("NORTH", null));
+        assertNull(MovementController.alignFacingToRail(null, null));
     }
 }

@@ -46,9 +46,10 @@ import org.xpfarm.redstonetrain.train.TrainRegistry;
  * </ul>
  *
  * <p>The config arrives through a {@link Supplier} so a successful reload is visible
- * here without re-registering the executor. Routing, permission gating, and the
- * preset-fallback helpers are headless-testable; only {@link #findTrain(Player)}
- * touches live entities (gate 7a).
+ * here without re-registering the executor. Routing and permission gating are
+ * headless-testable; preset resolution is shared via
+ * {@link SpeedModel#presetMultiplier}; only {@link #findTrain(Player)} touches live
+ * entities (gate 7a).
  *
  * <p>Geyser/Bedrock safety: plain chat components only — no GUI forms.
  */
@@ -145,7 +146,8 @@ public final class RedstoneTrainCommand implements CommandExecutor, TabCompleter
             return 0.0;
         }
         double cruise = SpeedModel.cruise(train.carCount(), cfg);
-        return SpeedModel.withPreset(cruise, presetMultiplier(train.speedPreset(), cfg), cfg);
+        return SpeedModel.withPreset(cruise,
+                SpeedModel.presetMultiplier(train.speedPreset(), cfg), cfg);
     }
 
     /** The riding lookup then an 8-block ray trace. Live-entity glue, gate 7a. */
@@ -179,36 +181,6 @@ public final class RedstoneTrainCommand implements CommandExecutor, TabCompleter
                     .append(Component.text(
                             " — keeping the previous configuration.", NamedTextColor.RED)));
         }
-    }
-
-    // ------------------------------------------- preset fallback (Task 3 flag)
-
-    /**
-     * The preset name a train should default to: {@code cruise} when configured,
-     * otherwise the <em>first</em> configured preset (config order), otherwise
-     * {@code cruise} as a harmless label when no presets exist at all.
-     */
-    public static String fallbackPreset(RtConfig cfg) {
-        if (cfg.speedPresets().containsKey(Train.DEFAULT_SPEED_PRESET)) {
-            return Train.DEFAULT_SPEED_PRESET;
-        }
-        return cfg.speedPresets().keySet().stream()
-                .findFirst()
-                .orElse(Train.DEFAULT_SPEED_PRESET);
-    }
-
-    /**
-     * Multiplier for a train's preset with the Task-3 fallback: the named preset if
-     * configured, else the {@link #fallbackPreset} multiplier, else {@code 1.0} when
-     * no presets are configured — never a crash.
-     */
-    public static double presetMultiplier(String preset, RtConfig cfg) {
-        Double multiplier = cfg.speedPresets().get(preset);
-        if (multiplier != null) {
-            return multiplier;
-        }
-        Double fallback = cfg.speedPresets().get(fallbackPreset(cfg));
-        return fallback != null ? fallback : 1.0;
     }
 
     // --------------------------------------------------------- tab completion

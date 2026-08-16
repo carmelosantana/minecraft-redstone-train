@@ -139,10 +139,8 @@ public final class ChargeDisplay {
         if (!engineOn || !ChargeModel.canMove(charge)) {
             return 0.0;
         }
-        double multiplier = preset != null
-                ? cfg.speedPresets().getOrDefault(preset, 1.0)
-                : 1.0;
-        return SpeedModel.withPreset(SpeedModel.cruise(cars, cfg), multiplier, cfg);
+        return SpeedModel.withPreset(SpeedModel.cruise(cars, cfg),
+                SpeedModel.presetMultiplier(preset, cfg), cfg);
     }
 
     /** One rider's bar and the train it tracks. */

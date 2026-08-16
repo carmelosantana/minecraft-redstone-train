@@ -13,6 +13,7 @@ package org.xpfarm.redstonetrain.model;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.xpfarm.redstonetrain.config.RtConfig;
@@ -173,5 +174,58 @@ class SpeedModelTest {
         assertEquals(0.0, result, EPS);
         assertTrue(Double.isFinite(result), "decayBoost must not produce NaN/Infinity");
         assertEquals(0.0, SpeedModel.decayBoost(0.0, cfg), EPS);
+    }
+
+    // --- preset resolution: the single shared resolver ------------------------------------
+
+    private static RtConfig presets(Map<String, Double> presets) {
+        return new RtConfig(0.40, 0.36, 2, 0.02, 0.10, 6, 0.06, 60, 100.0, 0.2, 50.0,
+                10.0, 90.0, 2.0, 0.5, true, presets);
+    }
+
+    @Test
+    void fallbackPresetPrefersCruiseWhenConfigured() {
+        Map<String, Double> map = new LinkedHashMap<>();
+        map.put("slow", 0.5);
+        map.put("cruise", 1.0);
+        assertEquals("cruise", SpeedModel.fallbackPreset(presets(map)));
+    }
+
+    @Test
+    void fallbackPresetUsesFirstConfiguredWhenCruiseIsMissing() {
+        Map<String, Double> map = new LinkedHashMap<>();
+        map.put("crawl", 0.25);
+        map.put("fast", 1.2);
+        assertEquals("crawl", SpeedModel.fallbackPreset(presets(map)));
+    }
+
+    @Test
+    void fallbackPresetSurvivesAnEmptyPresetMap() {
+        assertEquals("cruise", SpeedModel.fallbackPreset(presets(Map.of())));
+    }
+
+    @Test
+    void presetMultiplierUsesTheNamedPreset() {
+        Map<String, Double> map = new LinkedHashMap<>();
+        map.put("slow", 0.5);
+        map.put("cruise", 1.0);
+        assertEquals(0.5, SpeedModel.presetMultiplier("slow", presets(map)), EPS);
+        assertEquals(1.0, SpeedModel.presetMultiplier("cruise", presets(map)), EPS);
+    }
+
+    @Test
+    void presetMultiplierFallsBackForUnknownOrNullPreset() {
+        Map<String, Double> map = new LinkedHashMap<>();
+        map.put("crawl", 0.25);
+        assertEquals(0.25, SpeedModel.presetMultiplier("cruise", presets(map)), EPS,
+                "unknown preset must fall back to the first configured preset");
+        assertEquals(0.25, SpeedModel.presetMultiplier("warp", presets(map)), EPS);
+        assertEquals(0.25, SpeedModel.presetMultiplier(null, presets(map)), EPS);
+    }
+
+    @Test
+    void presetMultiplierIsOneWhenNoPresetsConfigured() {
+        assertEquals(1.0, SpeedModel.presetMultiplier("cruise", presets(Map.of())), EPS);
+        assertEquals(1.0, SpeedModel.presetMultiplier(null, presets(Map.of())), EPS);
     }
 }

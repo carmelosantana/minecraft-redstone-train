@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -192,5 +193,44 @@ class TrainRegistryTest {
         Train unregistered = trainWithCars(UUID.randomUUID(), List.of(UUID.randomUUID()));
         assertThrows(IllegalStateException.class,
                 () -> registry.uncoupleTail(unregistered, 0));
+    }
+
+    @Test
+    void pruneCarRemovesOnlyThatCarAndItsIndexEntry() {
+        UUID loco = UUID.randomUUID();
+        UUID front = UUID.randomUUID();
+        UUID middle = UUID.randomUUID();
+        UUID rear = UUID.randomUUID();
+        Train train = trainWithCars(loco, List.of(front, middle, rear));
+        registry.register(train);
+
+        assertTrue(registry.pruneCar(train, middle));
+
+        assertEquals(List.of(front, rear), train.cars(),
+                "cars behind the pruned one must stay coupled, unlike uncoupleTail");
+        assertNull(registry.byCar(middle),
+                "byCar must stop resolving immediately after pruneCar");
+        assertSame(train, registry.byCar(front));
+        assertSame(train, registry.byCar(rear));
+    }
+
+    @Test
+    void pruneCarUnknownCarReturnsFalseAndChangesNothing() {
+        UUID loco = UUID.randomUUID();
+        UUID car = UUID.randomUUID();
+        Train train = trainWithCars(loco, List.of(car));
+        registry.register(train);
+
+        assertFalse(registry.pruneCar(train, UUID.randomUUID()));
+        assertEquals(List.of(car), train.cars());
+        assertSame(train, registry.byCar(car));
+    }
+
+    @Test
+    void pruneCarOnUnregisteredTrainThrows() {
+        UUID car = UUID.randomUUID();
+        Train unregistered = trainWithCars(UUID.randomUUID(), List.of(car));
+        assertThrows(IllegalStateException.class,
+                () -> registry.pruneCar(unregistered, car));
     }
 }

@@ -18,9 +18,11 @@ import java.util.Objects;
 import java.util.UUID;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Powerable;
+import org.bukkit.block.data.Rail;
 import org.bukkit.entity.Minecart;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
@@ -40,14 +42,19 @@ import org.xpfarm.redstonetrain.train.TrainRegistry;
  * <p><strong>Structure.</strong> Every per-tick <em>decision</em> is a pure static
  * helper delegating to {@link SpeedModel}/{@link ChargeModel} (no duplicated formulas,
  * unit-tested headless): {@link #targetSpeed}, {@link #nextBoost}, {@link #nextCharge},
- * {@link #followerSpeed}, {@link #presetMultiplier}, {@link #facingFromVelocity}.
+ * {@link #followerSpeed}, {@link #facingFromVelocity}, {@link #alignFacingToRail}.
  * The Bukkit entity I/O (resolving members, velocity, max speed, rail block data) lives
  * in thin private methods and is exercised at gate 7a on a live server.
  *
- * <p><strong>Held trains.</strong> If any member entity cannot be resolved (unloaded
- * chunk), the whole train is held this tick — nothing moves, nothing drains, the
- * consist is never torn apart. Displacement tracking resets so the next loaded tick
- * does not see a teleport-sized jump.
+ * <p><strong>Held trains vs. orphaned cars.</strong> If the locomotive (or a car whose
+ * chunk neighborhood is not fully loaded) cannot be resolved, the whole train is held
+ * this tick — nothing moves, nothing drains, the consist is never torn apart on a mere
+ * chunk unload. Displacement tracking resets so the next loaded tick does not see a
+ * teleport-sized jump. But when a car cannot be resolved even though every chunk in
+ * the 3x3 neighborhood around the member ahead of it IS loaded, the car is genuinely
+ * gone (destroyed while its chunk was unloaded, so no destroy event ever fired) and is
+ * pruned from the consist atomically via {@link TrainRegistry#pruneCar}, then the
+ * consist is persisted — spec §7's "couplings validated against present entities".
  *
  * <p><strong>Motion strategy</strong> (per research: prefer {@code setMaxSpeed} plus a
  * periodic impulse over hard-writing the lead's velocity every tick, which stutters):
@@ -141,7 +148,7 @@ public final class MovementController implements Runnable {
         double charge = nextCharge(train.charge(), blocksMoved, powered, config);
         state.boostRemaining = nextBoost(powered, state.boostRemaining, config);
         double target = targetSpeed(train.carCount(),
-                presetMultiplier(train.speedPreset(), config),
+                SpeedModel.presetMultiplier(train.speedPreset(), config),
                 state.boostRemaining, charge, config);
 
         // --- entity I/O -----------------------------------------------------
@@ -220,15 +227,6 @@ public final class MovementController implements Runnable {
         return Math.min(Math.max(corrected, 0.0), cfg.cap());
     }
 
-    /** The preset's multiplier, or {@code 1.0} for an unknown/absent preset name. */
-    static double presetMultiplier(@Nullable String preset, RtConfig cfg) {
-        if (preset == null) {
-            return 1.0;
-        }
-        Double multiplier = cfg.speedPresets().get(preset);
-        return multiplier != null ? multiplier : 1.0;
-    }
-
     /**
      * Dominant cardinal direction of a horizontal velocity as a {@link BlockFace} name
      * ({@code NORTH}/{@code SOUTH}/{@code EAST}/{@code WEST}), or {@code null} when at
@@ -244,29 +242,130 @@ public final class MovementController implements Runnable {
         return vz > 0 ? "SOUTH" : "NORTH";
     }
 
+    /**
+     * The two cardinal travel directions a rail shape supports, as {@link BlockFace}
+     * names, front entry first — the first element is the deterministic default a
+     * facing-less train departs toward. Straight and ascending shapes list both ends
+     * of their axis; curves list their two exits.
+     */
+    static List<String> railFacings(Rail.Shape shape) {
+        return switch (shape) {
+            case NORTH_SOUTH, ASCENDING_SOUTH -> List.of("SOUTH", "NORTH");
+            case ASCENDING_NORTH -> List.of("NORTH", "SOUTH");
+            case EAST_WEST, ASCENDING_EAST -> List.of("EAST", "WEST");
+            case ASCENDING_WEST -> List.of("WEST", "EAST");
+            case SOUTH_EAST -> List.of("SOUTH", "EAST");
+            case SOUTH_WEST -> List.of("SOUTH", "WEST");
+            case NORTH_EAST -> List.of("NORTH", "EAST");
+            case NORTH_WEST -> List.of("NORTH", "WEST");
+        };
+    }
+
+    /**
+     * The cold-start departure facing (Fix for acceptance check 3): reconciles the
+     * persisted/seeded {@code lastFacing} with the rail shape under the locomotive so
+     * a freshly placed lone locomotive departs <em>along its track</em> on engine-on.
+     *
+     * <ul>
+     *   <li>No rail shape resolvable → keep {@code facing} (may be {@code null}:
+     *       nothing sensible to push toward off-rail).</li>
+     *   <li>Rail shape known and {@code facing} is one of its
+     *       {@link #railFacings travel directions} → keep it (the engine-on seeding
+     *       from the player's yaw picks the end).</li>
+     *   <li>Rail shape known but {@code facing} is absent or perpendicular to the
+     *       rail → the shape's deterministic default direction.</li>
+     * </ul>
+     */
+    static @Nullable String alignFacingToRail(@Nullable String facing,
+                                              @Nullable Rail.Shape shape) {
+        if (shape == null) {
+            return facing;
+        }
+        List<String> candidates = railFacings(shape);
+        // List.of lists reject contains(null), so guard the never-moved case first.
+        return facing != null && candidates.contains(facing)
+                ? facing
+                : candidates.getFirst();
+    }
+
     // ------------------------------------------------------ thin Bukkit glue
     // Everything below touches live entities/blocks and is validated at gate 7a.
 
     /**
-     * Resolves the locomotive plus every car, front to back. Returns {@code null} if
-     * any member is unresolvable (unloaded chunk or dead entity) — the caller holds
-     * the whole train rather than tearing it apart.
+     * Resolves the locomotive plus every car, front to back. Returns {@code null}
+     * (hold the whole train, tear nothing apart) when the locomotive is unresolvable,
+     * or when a car is unresolvable but might merely be unloaded.
+     *
+     * <p><strong>Orphaned-car pruning</strong> (spec §7: couplings are validated
+     * against present entities). Bukkit's {@code getEntity(uuid)} cannot distinguish
+     * "entity in an unloaded chunk" from "entity gone for good" by itself, and no
+     * destroy event fires for a cart removed while its chunk was unloaded. The proxy
+     * used here: coupled cars trail within a couple of blocks of the member ahead
+     * (the follower spring holds a {@value #TARGET_GAP}-block gap), so the car's
+     * chunk is always the chunk of the member ahead or one of its neighbors. When
+     * every chunk in that 3x3 neighborhood is loaded and the car still does not
+     * resolve, it is genuinely gone and is pruned atomically via
+     * {@link TrainRegistry#pruneCar}, then the trimmed consist is persisted. When any
+     * neighborhood chunk is unloaded, the ambiguity remains and the train is held
+     * (current behavior preserved).
      */
     private @Nullable List<Minecart> resolveMembers(Train train) {
-        List<Minecart> members = new ArrayList<>(train.carCount() + 1);
         if (!(plugin.getServer().getEntity(train.locomotiveId()) instanceof Minecart loco)
                 || !loco.isValid()) {
             return null;
         }
+        List<Minecart> members = new ArrayList<>(train.carCount() + 1);
         members.add(loco);
+        List<UUID> gone = null;
+        Minecart ahead = loco;
         for (UUID carId : train.cars()) {
-            if (!(plugin.getServer().getEntity(carId) instanceof Minecart car)
-                    || !car.isValid()) {
-                return null;
+            if (plugin.getServer().getEntity(carId) instanceof Minecart car
+                    && car.isValid()) {
+                members.add(car);
+                ahead = car;
+                continue;
             }
-            members.add(car);
+            if (!isNeighborhoodLoaded(ahead.getLocation())) {
+                return null; // possibly just unloaded: hold, never tear apart
+            }
+            if (gone == null) {
+                gone = new ArrayList<>(1);
+            }
+            gone.add(carId);
+        }
+        if (gone != null) {
+            for (UUID carId : gone) {
+                registry.pruneCar(train, carId);
+            }
+            codec.write(loco, train);
+            plugin.getLogger().info("Pruned " + gone.size()
+                    + (gone.size() == 1 ? " car that no longer exists"
+                            : " cars that no longer exist")
+                    + " from train " + train.locomotiveId() + ".");
         }
         return members;
+    }
+
+    /**
+     * True when every chunk in the 3x3 neighborhood around this location is loaded —
+     * the loaded-vs-gone discriminator for {@link #resolveMembers}'s pruning. Never
+     * loads chunks; {@link World#isChunkLoaded(int, int)} is a pure lookup.
+     */
+    private static boolean isNeighborhoodLoaded(Location location) {
+        World world = location.getWorld();
+        if (world == null) {
+            return false;
+        }
+        int chunkX = location.getBlockX() >> 4;
+        int chunkZ = location.getBlockZ() >> 4;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (!world.isChunkLoaded(chunkX + dx, chunkZ + dz)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /** Horizontal blocks the locomotive moved since last measured tick (0 on first). */
@@ -297,9 +396,12 @@ public final class MovementController implements Runnable {
     /**
      * Impulse strategy for the lead: only push when actual speed sags below
      * {@link #IMPULSE_THRESHOLD} of target (avoids per-tick velocity stutter). The
-     * travel axis comes from current velocity, or from the persisted
-     * {@code LAST_FACING} when at rest; a never-moved train with no facing stays put
-     * until an external nudge (e.g. the player's start push) sets one.
+     * travel axis comes from current velocity; at rest it comes from the persisted
+     * {@code LAST_FACING} reconciled with the rail shape under the locomotive via
+     * {@link #alignFacingToRail} — so a freshly placed locomotive with no history
+     * self-starts along its track (cold-start fix), and a facing seeded from the
+     * player's yaw at engine-on is snapped onto the rail axis. Only a resting
+     * locomotive that is off-rail with no known facing stays put.
      */
     private void driveLead(Minecart loco, Train train, double target) {
         Vector velocity = loco.getVelocity();
@@ -314,15 +416,31 @@ public final class MovementController implements Runnable {
         Vector direction;
         if (speed > REST_EPSILON) {
             direction = new Vector(velocity.getX() / speed, 0.0, velocity.getZ() / speed);
-        } else if (train.lastFacing() != null) {
-            direction = blockFaceDirection(train.lastFacing());
+        } else {
+            String departure = alignFacingToRail(train.lastFacing(), railShapeUnder(loco));
+            if (departure == null) {
+                return; // at rest, off-rail, unknown facing: nothing sensible to push toward
+            }
+            direction = blockFaceDirection(departure);
             if (direction == null) {
                 return;
             }
-        } else {
-            return; // at rest with unknown facing: nothing sensible to push toward
+            train.setLastFacing(departure);
         }
         loco.setVelocity(direction.multiply(target));
+    }
+
+    /**
+     * The {@link Rail.Shape} under the locomotive, or {@code null} when it is not on
+     * a rail. Mirrors {@link #isOverActivePoweredRail}'s one-block-down tolerance for
+     * ascending rails.
+     */
+    private @Nullable Rail.Shape railShapeUnder(Minecart loco) {
+        Block block = loco.getLocation().getBlock();
+        if (!(block.getBlockData() instanceof Rail)) {
+            block = block.getRelative(BlockFace.DOWN);
+        }
+        return block.getBlockData() instanceof Rail rail ? rail.getShape() : null;
     }
 
     /** {@code LAST_FACING} name to a horizontal unit vector, or null if malformed. */

@@ -18,7 +18,6 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,7 +31,8 @@ import org.xpfarm.redstonetrain.train.TrainRegistry;
 
 /**
  * Headless tests for {@link RedstoneTrainCommand}: pure argument routing, permission
- * gating, reload delegation, tab completion, and the speed-preset fallback helpers.
+ * gating, reload delegation, and tab completion. Preset resolution moved to
+ * {@code SpeedModelTest} with the shared {@code SpeedModel.presetMultiplier} helper.
  *
  * <p>The sender is a {@link Proxy}-based {@link CommandSender} stub — no live server.
  * Anything needing live entities (target-entity ray trace, riding lookup) is gate 7a.
@@ -210,50 +210,6 @@ final class RedstoneTrainCommandTest {
         StubSender sender = new StubSender("redstonetrain.use");
         command().route(sender.proxy(), new String[] {"info"});
         assertTrue(sender.anyMessageContains("player"), () -> sender.messages.toString());
-    }
-
-    // -------------------------------------------------- preset fallback (Task 3 flag)
-
-    @Test
-    void fallbackPresetPrefersCruiseWhenConfigured() {
-        Map<String, Double> presets = new LinkedHashMap<>();
-        presets.put("slow", 0.5);
-        presets.put("cruise", 1.0);
-        assertEquals("cruise", RedstoneTrainCommand.fallbackPreset(config(presets)));
-    }
-
-    @Test
-    void fallbackPresetUsesFirstConfiguredWhenCruiseIsMissing() {
-        Map<String, Double> presets = new LinkedHashMap<>();
-        presets.put("crawl", 0.25);
-        presets.put("fast", 1.2);
-        assertEquals("crawl", RedstoneTrainCommand.fallbackPreset(config(presets)));
-    }
-
-    @Test
-    void fallbackPresetSurvivesAnEmptyPresetMap() {
-        assertEquals("cruise", RedstoneTrainCommand.fallbackPreset(config(Map.of())));
-    }
-
-    @Test
-    void presetMultiplierUsesTheNamedPreset() {
-        Map<String, Double> presets = new LinkedHashMap<>();
-        presets.put("slow", 0.5);
-        presets.put("cruise", 1.0);
-        assertEquals(0.5, RedstoneTrainCommand.presetMultiplier("slow", config(presets)));
-    }
-
-    @Test
-    void presetMultiplierFallsBackForUnknownPreset() {
-        Map<String, Double> presets = new LinkedHashMap<>();
-        presets.put("crawl", 0.25);
-        assertEquals(0.25, RedstoneTrainCommand.presetMultiplier("cruise", config(presets)),
-                "unknown preset must fall back to the first configured preset");
-    }
-
-    @Test
-    void presetMultiplierIsOneWhenNoPresetsConfigured() {
-        assertEquals(1.0, RedstoneTrainCommand.presetMultiplier("cruise", config(Map.of())));
     }
 
     // --------------------------------------------------------- tab completion

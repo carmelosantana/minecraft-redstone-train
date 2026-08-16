@@ -32,6 +32,7 @@ import org.xpfarm.redstonetrain.item.RtKeys;
 import org.xpfarm.redstonetrain.item.RtRecipes;
 import org.xpfarm.redstonetrain.listener.CouplingListener;
 import org.xpfarm.redstonetrain.listener.InteractionListener;
+import org.xpfarm.redstonetrain.model.SpeedModel;
 import org.xpfarm.redstonetrain.train.Train;
 import org.xpfarm.redstonetrain.train.TrainCodec;
 import org.xpfarm.redstonetrain.train.TrainRegistry;
@@ -212,14 +213,14 @@ public final class RedstoneTrainPlugin extends JavaPlugin {
     /**
      * Task-3 fallback: a train whose persisted preset no longer exists in the config
      * (e.g. {@code cruise} removed or renamed) is moved to
-     * {@link RedstoneTrainCommand#fallbackPreset} so wrench cycling and the displayed
+     * {@link SpeedModel#fallbackPreset} so wrench cycling and the displayed
      * speed stay sensible instead of silently using an unknown name.
      */
     private void normalizeTrainPresets(RtConfig cfg) {
         if (registry == null || cfg.speedPresets().isEmpty()) {
             return;
         }
-        String fallback = RedstoneTrainCommand.fallbackPreset(cfg);
+        String fallback = SpeedModel.fallbackPreset(cfg);
         for (Train train : registry.all()) {
             if (!cfg.speedPresets().containsKey(train.speedPreset())) {
                 train.setSpeedPreset(fallback);
@@ -283,7 +284,7 @@ public final class RedstoneTrainPlugin extends JavaPlugin {
         return codec.read(cart).map(train -> {
             if (!cfg.speedPresets().isEmpty()
                     && !cfg.speedPresets().containsKey(train.speedPreset())) {
-                train.setSpeedPreset(RedstoneTrainCommand.fallbackPreset(cfg));
+                train.setSpeedPreset(SpeedModel.fallbackPreset(cfg));
             }
             registry.register(train);
             return true;

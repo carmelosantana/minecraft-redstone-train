@@ -31,6 +31,33 @@ import org.xpfarm.redstonetrain.train.TrainRegistry;
  */
 class InteractionListenerTest {
 
+    // ---------------------------------------------------------- facingFromYaw
+
+    @Test
+    void facingFromYawMapsTheFourCardinalYaws() {
+        assertEquals("SOUTH", InteractionListener.facingFromYaw(0.0f));
+        assertEquals("WEST", InteractionListener.facingFromYaw(90.0f));
+        assertEquals("NORTH", InteractionListener.facingFromYaw(180.0f));
+        assertEquals("EAST", InteractionListener.facingFromYaw(270.0f));
+    }
+
+    @Test
+    void facingFromYawSnapsToTheNearestCardinal() {
+        assertEquals("SOUTH", InteractionListener.facingFromYaw(30.0f));
+        assertEquals("WEST", InteractionListener.facingFromYaw(100.0f));
+        assertEquals("NORTH", InteractionListener.facingFromYaw(190.0f));
+        assertEquals("SOUTH", InteractionListener.facingFromYaw(359.0f));
+    }
+
+    @Test
+    void facingFromYawNormalizesNegativeAndOverflowingYaws() {
+        // Bukkit yaw can be negative or beyond 360 depending on how the client turned.
+        assertEquals("EAST", InteractionListener.facingFromYaw(-90.0f));
+        assertEquals("NORTH", InteractionListener.facingFromYaw(-180.0f));
+        assertEquals("WEST", InteractionListener.facingFromYaw(450.0f));
+        assertEquals("SOUTH", InteractionListener.facingFromYaw(-720.0f));
+    }
+
     // -------------------------------------------------------------- nextPreset
 
     @Test

@@ -10,11 +10,18 @@
  */
 package org.xpfarm.redstonetrain.model;
 
+import org.jetbrains.annotations.Nullable;
 import org.xpfarm.redstonetrain.config.RtConfig;
+import org.xpfarm.redstonetrain.train.Train;
 
 /**
  * Pure speed math for a train, in blocks per tick. No Bukkit types; every method is a
  * function of its numeric inputs and the {@link RtConfig} snapshot.
+ *
+ * <p>This class is also the single home of preset-name resolution
+ * ({@link #fallbackPreset}, {@link #presetMultiplier}): the movement controller, the
+ * boss bar, and the {@code /redstonetrain} command all resolve a train's preset name
+ * to its multiplier here, with one consistent fallback rule.
  */
 public final class SpeedModel {
 
@@ -79,5 +86,39 @@ public final class SpeedModel {
         }
         double step = cfg.poweredRailBoost() / ticks;
         return Math.max(0.0, boostRemaining - step);
+    }
+
+    // ------------------------------------------------------- preset resolution
+
+    /**
+     * The preset name a train should default to: {@link Train#DEFAULT_SPEED_PRESET}
+     * when configured, otherwise the <em>first</em> configured preset (config order),
+     * otherwise {@link Train#DEFAULT_SPEED_PRESET} as a harmless label when no presets
+     * exist at all.
+     */
+    public static String fallbackPreset(RtConfig cfg) {
+        if (cfg.speedPresets().containsKey(Train.DEFAULT_SPEED_PRESET)) {
+            return Train.DEFAULT_SPEED_PRESET;
+        }
+        return cfg.speedPresets().keySet().stream()
+                .findFirst()
+                .orElse(Train.DEFAULT_SPEED_PRESET);
+    }
+
+    /**
+     * Multiplier for a train's preset name — the single shared resolver (movement
+     * controller, boss bar, and command all call this): the named preset if configured,
+     * else the {@link #fallbackPreset} multiplier, else {@code 1.0} when no presets are
+     * configured at all — never a crash.
+     */
+    public static double presetMultiplier(@Nullable String preset, RtConfig cfg) {
+        if (preset != null) {
+            Double multiplier = cfg.speedPresets().get(preset);
+            if (multiplier != null) {
+                return multiplier;
+            }
+        }
+        Double fallback = cfg.speedPresets().get(fallbackPreset(cfg));
+        return fallback != null ? fallback : 1.0;
     }
 }

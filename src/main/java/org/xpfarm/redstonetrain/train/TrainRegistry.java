@@ -117,6 +117,32 @@ public final class TrainRegistry {
         return tail;
     }
 
+    /**
+     * Atomically removes a single car from anywhere in a <em>registered</em> train's
+     * consist, updating the car index together with it so {@code byCar} stops
+     * resolving the pruned car immediately. Cars behind the pruned one stay coupled
+     * (unlike {@link #uncoupleTail}) — this is the validation path for a car whose
+     * entity no longer exists (e.g. destroyed while its chunk was unloaded, where no
+     * destroy event ever fired).
+     *
+     * @return {@code true} if the car was coupled and has been removed
+     * @throws IllegalStateException if the train is not currently registered
+     */
+    public boolean pruneCar(Train train, UUID carId) {
+        Objects.requireNonNull(train, "train");
+        Objects.requireNonNull(carId, "carId");
+        if (byLocomotive.get(train.locomotiveId()) != train) {
+            throw new IllegalStateException(
+                    "Train is not registered; register it before pruning: "
+                            + train.locomotiveId());
+        }
+        if (!train.removeCar(carId)) {
+            return false;
+        }
+        byCar.remove(carId);
+        return true;
+    }
+
     /** The train whose locomotive has this UUID, or {@code null}. */
     public @Nullable Train byLocomotive(UUID locomotiveId) {
         return byLocomotive.get(locomotiveId);

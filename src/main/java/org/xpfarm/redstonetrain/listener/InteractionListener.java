@@ -70,8 +70,8 @@ import org.xpfarm.redstonetrain.train.TrainRegistry;
  * Java-only chat input; all text goes through the Adventure component API.
  *
  * <p>The decisions ({@link #nextPreset}, {@link #uncoupleFromMember},
- * {@link #sameTrain}) are pure and unit-tested headless; event wiring and item
- * consumption are validated at gate 7a on a live server.
+ * {@link #sameTrain}, {@link #facingFromYaw}) are pure and unit-tested headless;
+ * event wiring and item consumption are validated at gate 7a on a live server.
  */
 public final class InteractionListener implements Listener {
 
@@ -132,6 +132,12 @@ public final class InteractionListener implements Listener {
         // does not mount the locomotive on top of toggling it.
         event.setCancelled(true);
         train.setEngineOn(!train.engineOn());
+        if (train.engineOn() && train.lastFacing() == null) {
+            // Cold start: a freshly placed locomotive has never moved, so it has no
+            // travel direction yet. Seed one from the toggling player's yaw; the
+            // movement controller snaps it onto the rail axis on the next tick.
+            train.setLastFacing(facingFromYaw(player.getLocation().getYaw()));
+        }
         persist(train);
         display.update(train);
         player.sendMessage(train.engineOn()
@@ -227,6 +233,22 @@ public final class InteractionListener implements Listener {
     }
 
     // ------------------------------------------------- pure, headless-testable
+
+    /**
+     * Nearest cardinal to a Minecraft yaw, as a {@code BlockFace} name. Minecraft
+     * yaw: 0° is south (+Z), 90° west (-X), 180°/-180° north (-Z), 270°/-90° east
+     * (+X); any real value (including negatives and multiples of 360°) normalizes.
+     * Used to seed a cold-start travel direction when the engine is switched on.
+     */
+    static String facingFromYaw(float yaw) {
+        int quarter = Math.floorMod(Math.round(yaw / 90.0f), 4);
+        return switch (quarter) {
+            case 0 -> "SOUTH";
+            case 1 -> "WEST";
+            case 2 -> "NORTH";
+            default -> "EAST";
+        };
+    }
 
     /**
      * The preset after {@code current} in {@code presetsInOrder}, wrapping around at
