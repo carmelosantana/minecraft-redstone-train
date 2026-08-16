@@ -13,6 +13,7 @@ package org.xpfarm.redstonetrain.train;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -63,6 +64,57 @@ public final class TrainRegistry {
             byCar.values().removeIf(owner -> owner == removed);
         }
         return removed;
+    }
+
+    /**
+     * Atomically couples a car at the back of a <em>registered</em> train, updating the
+     * consist and the car index together so {@code byCar(carId)} resolves immediately.
+     *
+     * <p>This is the required write path for coupling: never call
+     * {@link Train#addCar(UUID)} directly without re-indexing, or {@link #byCar(UUID)}
+     * silently returns {@code null} for the new car.
+     *
+     * @throws IllegalStateException if the train is not currently registered
+     * @throws IllegalArgumentException if the car already belongs to any train (as car
+     *     or locomotive), or equals the train's own locomotive
+     */
+    public void coupleCar(Train train, UUID carId) {
+        Objects.requireNonNull(train, "train");
+        Objects.requireNonNull(carId, "carId");
+        if (byLocomotive.get(train.locomotiveId()) != train) {
+            throw new IllegalStateException(
+                    "Train is not registered; register it before coupling: "
+                            + train.locomotiveId());
+        }
+        if (byCar.containsKey(carId) || byLocomotive.containsKey(carId)) {
+            throw new IllegalArgumentException(
+                    "Entity already belongs to a train: " + carId);
+        }
+        train.addCar(carId);
+        byCar.put(carId, train);
+    }
+
+    /**
+     * Atomically uncouples every car from {@code index} (0-based, inclusive) to the back
+     * of a <em>registered</em> train, updating the consist and the car index together so
+     * {@code byCar} stops resolving the removed cars immediately.
+     *
+     * @return the removed tail, front to back
+     * @throws IllegalStateException if the train is not currently registered
+     * @throws IndexOutOfBoundsException if {@code index} is not in {@code [0, carCount())}
+     */
+    public List<UUID> uncoupleTail(Train train, int index) {
+        Objects.requireNonNull(train, "train");
+        if (byLocomotive.get(train.locomotiveId()) != train) {
+            throw new IllegalStateException(
+                    "Train is not registered; register it before uncoupling: "
+                            + train.locomotiveId());
+        }
+        List<UUID> tail = train.uncoupleFrom(index);
+        for (UUID car : tail) {
+            byCar.remove(car);
+        }
+        return tail;
     }
 
     /** The train whose locomotive has this UUID, or {@code null}. */

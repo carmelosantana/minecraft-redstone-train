@@ -132,4 +132,65 @@ class TrainRegistryTest {
         registry.register(trainWithCars(UUID.randomUUID(), List.of()));
         assertThrows(UnsupportedOperationException.class, () -> registry.all().clear());
     }
+
+    @Test
+    void coupleCarMutatesConsistAndIndexAtomically() {
+        UUID loco = UUID.randomUUID();
+        Train train = trainWithCars(loco, List.of());
+        registry.register(train);
+
+        UUID car = UUID.randomUUID();
+        registry.coupleCar(train, car);
+
+        assertEquals(List.of(car), train.cars());
+        assertSame(train, registry.byCar(car),
+                "byCar must resolve immediately after coupleCar, no re-register needed");
+    }
+
+    @Test
+    void coupleCarOnUnregisteredTrainThrows() {
+        Train unregistered = trainWithCars(UUID.randomUUID(), List.of());
+        assertThrows(IllegalStateException.class,
+                () -> registry.coupleCar(unregistered, UUID.randomUUID()));
+    }
+
+    @Test
+    void coupleCarRejectsAMemberOfAnyTrain() {
+        UUID loco = UUID.randomUUID();
+        UUID existingCar = UUID.randomUUID();
+        Train train = trainWithCars(loco, List.of(existingCar));
+        registry.register(train);
+        Train other = trainWithCars(UUID.randomUUID(), List.of());
+        registry.register(other);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> registry.coupleCar(other, existingCar), "car of another train");
+        assertThrows(IllegalArgumentException.class,
+                () -> registry.coupleCar(other, loco), "locomotive of another train");
+        assertEquals(0, other.carCount());
+    }
+
+    @Test
+    void uncoupleTailMutatesConsistAndIndexAtomically() {
+        UUID loco = UUID.randomUUID();
+        UUID front = UUID.randomUUID();
+        UUID rear = UUID.randomUUID();
+        Train train = trainWithCars(loco, List.of(front, rear));
+        registry.register(train);
+
+        List<UUID> tail = registry.uncoupleTail(train, 1);
+
+        assertEquals(List.of(rear), tail);
+        assertEquals(List.of(front), train.cars());
+        assertSame(train, registry.byCar(front));
+        assertNull(registry.byCar(rear),
+                "byCar must stop resolving immediately after uncoupleTail");
+    }
+
+    @Test
+    void uncoupleTailOnUnregisteredTrainThrows() {
+        Train unregistered = trainWithCars(UUID.randomUUID(), List.of(UUID.randomUUID()));
+        assertThrows(IllegalStateException.class,
+                () -> registry.uncoupleTail(unregistered, 0));
+    }
 }
