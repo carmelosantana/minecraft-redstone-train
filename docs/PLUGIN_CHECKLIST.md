@@ -148,18 +148,18 @@ the stored ordered UUID list and validated against present entities.
 
 ## 2. Repository
 
-- [ ] Repository is `carmelosantana/minecraft-redstone-train` with an SSH `origin` and `main` branch. → gate 2 (scaffold); no repo exists yet.
-- [ ] Existing user-owned worktree changes were identified and preserved. → gate 2.
-- [ ] No `herobrinesystems` references remain in source, metadata, workflows, remotes, or documentation. → gate 2/3.
+- [x] Repository is `carmelosantana/minecraft-redstone-train` with an SSH `origin` and `main` branch. → created 2026-08-16 (public), SSH remote `git@github.com:carmelosantana/minecraft-redstone-train.git`, `main` pushed (commit `e84ba0e`).
+- [x] Existing user-owned worktree changes were identified and preserved. → directory was empty at gate 2; nothing to preserve.
+- [x] No `herobrinesystems` references remain in source, metadata, workflows, remotes, or documentation. → `rg` scan clean; the only hit is this checklist's own self-describing check text (line in §2), not an obsolete reference.
 
 ## 3. Metadata
 
-- [ ] AGPL-3.0-or-later `LICENSE` and Maven license metadata are present and consistent. → gate 3.
-- [ ] `https://xpfarm.org` metadata and Carmelo Santana author metadata are present. → gate 3.
-- [ ] `play.xpfarm.org` is recorded as the public Minecraft server hostname where server identity is documented. → gate 3.
-- [ ] New work uses the `org.xpfarm` Maven group, or an existing-coordinate compatibility decision is documented. → gate 3 (planned: `org.xpfarm`).
-- [ ] Repository slug, artifact, releasable JAR, updater destination, and `plugin.yml` names are consistent. → naming chain established above; scaffold confirms.
-- [ ] No secrets committed in source, defaults, tests, logs, history, or documentation. → gate 3.
+- [x] AGPL-3.0-or-later `LICENSE` and Maven license metadata are present and consistent. → full AGPL `LICENSE`; POM `<licenses>` names AGPL-3.0-or-later at the canonical URL.
+- [x] `https://xpfarm.org` metadata and Carmelo Santana author metadata are present. → POM `<url>`/`<developers>` and `plugin.yml` `website`/`author`.
+- [x] `play.xpfarm.org` is recorded as the public Minecraft server hostname where server identity is documented. → `README.md` "Play" section.
+- [x] New work uses the `org.xpfarm` Maven group, or an existing-coordinate compatibility decision is documented. → `org.xpfarm:redstone-train:0.1.0`.
+- [x] Repository slug, artifact, releasable JAR, updater destination, and `plugin.yml` names are consistent. → slug `redstone-train` = artifactId; JAR `redstone-train-0.1.0.jar`; updater dest `redstone-train.jar`; `plugin.yml` name `RedstoneTrain`.
+- [x] No secrets committed in source, defaults, tests, logs, history, or documentation. → no credentials/tokens/endpoints in any committed file.
 
 ## 4. Compatibility
 
@@ -190,9 +190,9 @@ the stored ordered UUID list and validated against present entities.
 
 ## 8. CI/CD
 
-- [ ] Identical standard plugin Actions workflow is installed with the required triggers, Temurin 25 build, artifact, checksum, and release behavior. → gate 2/8 (scaffold installs workflow).
-- [ ] Successful main Actions run is recorded before tagging. → gate 8.
-- [ ] Workflow permissions contain no broader access than the documented contract. → gate 8.
+- [x] Identical standard plugin Actions workflow is installed with the required triggers, Temurin 25 build, artifact, checksum, and release behavior. → `.github/workflows/build.yml` matches the `GITHUB_ACTIONS.md` contract (push `main`/`v*`, PR→`main`, `workflow_dispatch`; Temurin 25; `mvn clean verify`; bare-filename `SHA256SUMS.txt`; `v*` tag release upload excluding `original-*`).
+- [ ] Successful main Actions run is recorded before tagging. → gate 8b (`minecraft-plugin-release`); first push triggered a run on 2026-08-16 but its result is not this skill's to verify.
+- [x] Workflow permissions contain no broader access than the documented contract. → `permissions: contents: write` only.
 
 ## 9. Release
 
