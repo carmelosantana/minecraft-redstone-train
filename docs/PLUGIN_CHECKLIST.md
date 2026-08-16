@@ -204,15 +204,15 @@ Runtime verification (7a) proved the plugin loads/enables green, the cross-play 
 ## 8. CI/CD
 
 - [x] Identical standard plugin Actions workflow is installed with the required triggers, Temurin 25 build, artifact, checksum, and release behavior. → `.github/workflows/build.yml` matches the `GITHUB_ACTIONS.md` contract (push `main`/`v*`, PR→`main`, `workflow_dispatch`; Temurin 25; `mvn clean verify`; bare-filename `SHA256SUMS.txt`; `v*` tag release upload excluding `original-*`).
-- [ ] Successful main Actions run is recorded before tagging. → gate 8b (`minecraft-plugin-release`); first push triggered a run on 2026-08-16 but its result is not this skill's to verify.
+- [x] Successful main Actions run is recorded before tagging. → main run for merge commit `42eaa5e` "Merge Redstone Train MVP v0.1.0 implementation" completed **success** (run 31962167754) before tagging.
 - [x] Workflow permissions contain no broader access than the documented contract. → `permissions: contents: write` only.
 
 ## 9. Release
 
-- [ ] Semantic version matches the POM, plugin metadata, and `v<version>` tag. → gate 9.
-- [ ] Successful tag Actions run and GitHub release are recorded. → gate 9.
-- [ ] Release contains exactly one updater-matching JAR plus `SHA256SUMS.txt` and no `original-*` JAR. → gate 9.
-- [ ] Downloaded release assets pass `sha256sum --check SHA256SUMS.txt`. → gate 9.
+- [x] Semantic version matches the POM, plugin metadata, and `v<version>` tag. → `0.1.0` in POM, embedded `plugin.yml` `version: '0.1.0'`, tag `v0.1.0` on commit `42eaa5e`.
+- [x] Successful tag Actions run and GitHub release are recorded. → tag run 31962487825 completed **success**; release `v0.1.0` published (non-draft, non-prerelease) at https://github.com/carmelosantana/minecraft-redstone-train/releases/tag/v0.1.0.
+- [x] Release contains exactly one updater-matching JAR plus `SHA256SUMS.txt` and no `original-*` JAR. → assets: `redstone-train-0.1.0.jar` + `SHA256SUMS.txt` (1 releasable JAR, 0 `original-*`).
+- [x] Downloaded release assets pass `sha256sum --check SHA256SUMS.txt`. → `redstone-train-0.1.0.jar: OK`.
 
 ## 10. Updater
 
