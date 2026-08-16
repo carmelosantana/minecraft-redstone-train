@@ -227,8 +227,8 @@ Not a gate. Deployment is updater pickup: a verified release plus a correct mani
 this lifecycle owes. Leaving this section entirely unticked is the normal resting state and blocks
 nothing — not release, not enrolment, not handoff.
 
-- [ ] Enrolment confirmed live and correct: release sound, manifest entry on `origin/main`, gate 10 genuinely completed.
-- [ ] Deployment evidence recorded, if and only if an operator relayed some. Otherwise note "enrolled, not known to be deployed" and leave unticked.
+- [x] Enrolment confirmed live and correct: release sound, manifest entry on `origin/main`, gate 10 genuinely completed. → 2026-08-16 readiness check: release `v0.1.0` non-draft/non-prerelease with `redstone-train-0.1.0.jar` + `SHA256SUMS.txt`; manifest entry on `origin/main` (updater `c840503`) with matching anchored regex, `redstone-train.jar` destination, default-enabled, no pin; gate 10 all ticked; status `active`.
+- [ ] Deployment evidence recorded, if and only if an operator relayed some. → **enrolled, not known to be deployed.** No operator has relayed that the production server recreated and picked it up; pickup happens on the server's next recreation, outside this toolkit. Client play-test pending (see gate 12).
 
 ## 12. Handoff
 
