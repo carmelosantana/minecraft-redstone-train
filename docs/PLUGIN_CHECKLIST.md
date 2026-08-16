@@ -6,7 +6,7 @@ Copy this file for one plugin and replace every `<...>` field. Leave an unchecke
 - Slug: `redstone-train`
 - Repository: `carmelosantana/minecraft-redstone-train`
 - Owner: `Carmelo Santana`
-- Target version: `0.1.0`
+- Target version: `0.1.1`
 - Paper version: `26.1.2 build 74`
 - Java version: `25`
 - Updater destination: `redstone-train.jar`
@@ -49,6 +49,7 @@ engine, charge it, throttle up, and it follows the track.
 |---|---|---|---|
 | `/redstonetrain info` | none | `redstonetrain.use` | Show stats (charge %, speed, car count) of the train the player is looking at |
 | `/redstonetrain reload` | none | `redstonetrain.admin` | Reload `config.yml` |
+| `/redstonetrain give` | `<player> <locomotive\|wrench> [amount]` | `redstonetrain.admin` | (v0.1.1) Give a player the Locomotive or Train Wrench item; amount clamped 1–64, overflow dropped at feet |
 
 ### Events
 
@@ -213,6 +214,8 @@ Runtime verification (7a) proved the plugin loads/enables green, the cross-play 
 - [x] Successful tag Actions run and GitHub release are recorded. → tag run 31962487825 completed **success**; release `v0.1.0` published (non-draft, non-prerelease) at https://github.com/carmelosantana/minecraft-redstone-train/releases/tag/v0.1.0.
 - [x] Release contains exactly one updater-matching JAR plus `SHA256SUMS.txt` and no `original-*` JAR. → assets: `redstone-train-0.1.0.jar` + `SHA256SUMS.txt` (1 releasable JAR, 0 `original-*`).
 - [x] Downloaded release assets pass `sha256sum --check SHA256SUMS.txt`. → `redstone-train-0.1.0.jar: OK`.
+
+**v0.1.1 (2026-08-16)** — admin `/redstonetrain give` subcommand. Fable 5 implement / Opus 4.8 review (Approved); `mvn clean verify` green (209 tests), JAR inspected; gate-7a runtime verified (v0.1.1 enabled; give routing/validation exercised over RCON — usage, unknown-item, offline-player, amount-parse; full inventory-give to a live player is a gate-12 play-test item). Main run `31964445166` success; tag run `31964506632` success; release `v0.1.1` non-draft with `redstone-train-0.1.1.jar` + `SHA256SUMS.txt` (`sha256sum --check: OK`). Updater unpinned → dry-run resolves `would install v0.1.1`; no manifest change needed.
 
 ## 10. Updater
 
