@@ -54,14 +54,13 @@ engine, charge it, throttle up, and it follows the track.
 
 | Event | Listen/Fire | Why |
 |---|---|---|
-| `VehicleCreateEvent` | listen | Detect a minecart just placed; run auto-couple check against nearby trains |
-| `PlayerInteractEntityEvent` | listen | Right-click locomotive → toggle engine; redstone-in-hand → top up charge; Train Wrench → cycle speed / uncouple |
-| `VehicleMoveEvent` | listen | Detect the lead crossing an active powered rail (boost + recharge); apply per-block charge drain |
-| `VehicleEntityCollisionEvent` | listen | Suppress bounce between coupled train members |
-| `VehicleDestroyEvent` / `EntityRemoveFromWorldEvent` | listen | Uncouple + clean the registry when a member is destroyed/despawned |
+| `VehicleCreateEvent` + `PlayerInteractEvent` handshake | listen | Detect a minecart just placed (item PDC does not copy to the entity, so a same-tick block-keyed handshake tags locomotives); run auto-couple check against nearby trains |
+| `PlayerInteractEntityEvent` | listen | Right-click locomotive → toggle engine (seeds initial facing from player yaw); redstone-in-hand → top up charge; Train Wrench → cycle speed / uncouple |
+| `VehicleEntityCollisionEvent` | listen | Suppress bounce between coupled train members (same-train only) |
+| `VehicleDestroyEvent` / `EntityRemoveFromWorldEvent` | listen | Uncouple + clean the registry when a member is destroyed/despawned (`isDead()` guard vs chunk-unload) |
 | `VehicleEnterEvent` / `VehicleExitEvent` | listen | Show/hide the rider boss bar |
-| `ChunkLoadEvent` | listen | Rebuild registry entries for tagged locos entering memory |
-| Repeating scheduler task (per tick) | — | `MovementController` group update: speed clamp, lead impulse, follower spring spacing, boost decay, idle trickle-charge |
+| `EntitiesLoadEvent` | listen | Rebuild registry entries for tagged locos entering memory (correct modern hook; replaces the originally-planned `ChunkLoadEvent`) |
+| Repeating scheduler task (per tick) | — | `MovementController` group update via per-tick displacement polling (replaces the originally-planned `VehicleMoveEvent`): speed clamp, lead impulse + cold-start, follower spring spacing, powered-rail boost/recharge read from `Powerable#isPowered()`, boost decay, idle trickle-charge, per-block drain, orphaned-car prune; then per-rider `ChargeDisplay` update |
 
 ### Permissions
 
@@ -146,6 +145,20 @@ the stored ordered UUID list and validated against present entities.
 
 **Withheld gates:** none. Status is active; the plugin runs the full pipeline.
 
+### Gate-7a coverage gaps → gate-12 client play-test obligation
+
+Runtime verification (7a) proved the plugin loads/enables green, the cross-play stack starts together, and the command/reload surface works over RCON. It could **not** reach the following (no client joined, and there is no RCON event/item test-harness plugin yet) — these become the gate-12 play-test obligation, to be run on `play.xpfarm.org` by the team:
+
+- **Crafting** — Minecart + Redstone Block → Locomotive, and the Train Wrench recipe, actually craft (acceptance 1).
+- **Placement → tagged loco** — placing the Locomotive item spawns a tagged rideable minecart with charge 50, via the block-keyed `PlayerInteract`→`VehicleCreate` handshake (acceptance 2; a locomotive must NOT be mis-coupled onto an adjacent train as a car).
+- **Cold-start & movement** — toggling the engine on a freshly placed lone loco departs it along the rail; it follows curves/junctions; speed matches the formula and never exceeds cap (acceptance 3, 5).
+- **Auto-coupling** — a vanilla minecart placed adjacent on connected rail couples and follows without bouncing; `byCar` resolves it (acceptance 4).
+- **Charge economy** — drain 0.2/block, coast-to-stop at 0, powered-rail boost + recharge, idle trickle, redstone right-click +10/+90 (acceptance 6, 7).
+- **Train Wrench** — sneak-uncouple tail; non-sneak preset cycle (acceptance 8).
+- **Boss bar** — appears while riding, hides on dismount; **Bedrock rendering** of boss bar and item names/lore (acceptance 9).
+- **Restart round-trip** — place a real multi-car train, restart, confirm charge + couplings rebuild from PDC (acceptance 10). (7a saw "restored 0 trains" on a fresh world — the rebuild code path ran but had no trains to restore.)
+- **Deferred edge cases** — `isDead()` chunk-unload guard doesn't tear trains apart; orphaned-car prune vs hold on unloaded chunk; follower spacing feel on tight curves; a locomotive destroyed while its chunk is unloaded still holds its train (known limitation).
+
 ## 2. Repository
 
 - [x] Repository is `carmelosantana/minecraft-redstone-train` with an SSH `origin` and `main` branch. → created 2026-08-16 (public), SSH remote `git@github.com:carmelosantana/minecraft-redstone-train.git`, `main` pushed (commit `e84ba0e`).
@@ -163,30 +176,30 @@ the stored ordered UUID list and validated against present entities.
 
 ## 4. Compatibility
 
-- [ ] Java 25/Paper 26.1.2 build 74 compile succeeds and `plugin.yml` uses `api-version: '26.1'`, matching the API compiled against (see `PLUGIN_LIFECYCLE.md` §4 — a lower value opts the JAR into Paper's `Commodore` bytecode rewrites). → gate 4.
-- [ ] Hard dependencies, soft dependencies, optional APIs, and load ordering were reviewed and declared. → none planned (Paper API only).
-- [ ] Geyser/Floodgate/ViaVersion review covers Bedrock-safe input, UI, inventory, identity, and protocol behavior. → gate 4 (see Bedrock considerations in §1).
+- [x] Java 25/Paper 26.1.2 build 74 compile succeeds and `plugin.yml` uses `api-version: '26.1'`, matching the API compiled against. → `mvn clean verify` green on Java 25.0.3; embedded `plugin.yml` shows `api-version: '26.1'`, `version: '0.1.0'`.
+- [x] Hard dependencies, soft dependencies, optional APIs, and load ordering were reviewed and declared. → none (Paper API only, `provided` scope); no `depend`/`softdepend`/`loadbefore` needed.
+- [x] Geyser/Floodgate/ViaVersion review covers Bedrock-safe input, UI, inventory, identity, and protocol behavior. → identity is PDC-only (no name/CustomModelData reliance); interactions are right-click-entity / right-click-item / boss bar / chat components only, no GUI forms; runtime confirmed Geyser+Floodgate+ViaVersion start green alongside the plugin. Bedrock-*rendered* item/boss-bar appearance is a gate-12 client play-test item.
 
 ## 5. External services
 
-- [ ] External integrations are disabled by default or require explicit configuration and have bounded timeouts. → N/A, none.
-- [ ] Ollama/Umami-style external endpoints are optional and failure-tolerant when applicable. → N/A, none.
-- [ ] Endpoint failure cannot fail server/plugin startup, and diagnostics redact secrets. → N/A, none.
+- [x] External integrations are disabled by default or require explicit configuration and have bounded timeouts. → N/A: no external integrations (no Ollama/Umami/network calls anywhere in the code).
+- [x] Ollama/Umami-style external endpoints are optional and failure-tolerant when applicable. → N/A, none.
+- [x] Endpoint failure cannot fail server/plugin startup, and diagnostics redact secrets. → N/A, none; no secrets in code, config, tests, or logs (verified in JAR and runtime logs).
 
 ## 6. Tests and build
 
-- [ ] Unit tests cover separable logic, configuration, serialization, permissions, and failure paths where applicable. → gate 6 (speed formula, charge math, capacity/soft-cap, spring-spacing, boss-bar text).
-- [ ] `PluginDescriptorTest` parses `plugin.yml` and `config.yml` with SnakeYAML and asserts `name`, `main`, a `String`-typed `api-version`, a fully-substituted `version`, every command the code looks up, every permission the code checks, and the declared soft dependencies. → gate 6.
-- [ ] `mvn --batch-mode --no-transfer-progress clean verify` succeeds. → gate 6.
-- [ ] The shaded releasable JAR and embedded `plugin.yml` were inspected; `original-*` JARs are excluded. → gate 6.
+- [x] Unit tests cover separable logic, configuration, serialization, permissions, and failure paths where applicable. → 201 tests: RtConfig validation, SpeedModel (spec table verbatim @1e-9) + ChargeModel math, Train/registry ordering + both-way lookup + atomic couple/uncouple/prune, TrainCodec encode/decode, rail-connection helper, movement decision helpers, cold-start facing helpers, ChargeDisplay.format + preset resolver, command routing + permission gating.
+- [x] `PluginDescriptorTest` parses `plugin.yml` and `config.yml` with SnakeYAML and asserts `name`, `main`, a `String`-typed `api-version`, a fully-substituted `version`, every command the code looks up, every permission the code checks, and the declared soft dependencies. → present and green (5 tests); no soft dependencies declared (none exist).
+- [x] `mvn --batch-mode --no-transfer-progress clean verify` succeeds. → BUILD SUCCESS, 201/201 tests, run on Java 25.0.3.
+- [x] The shaded releasable JAR and embedded `plugin.yml` were inspected; `original-*` JARs are excluded. → `redstone-train-0.1.0.jar`: embedded `plugin.yml` (version 0.1.0, api-version '26.1', correct main/commands/permissions), `config.yml` shipped, 31 plugin classes, NO `org/bukkit`/`io/papermc` shaded (paper-api provided), no secrets; `original-*` present in target/ but excluded from the release artifact.
 
 ## 7. Matrix
 
-- [ ] Fresh-volume [Legendary Java Minecraft Geyser Floodgate stack](https://github.com/TheRemote/Legendary-Java-Minecraft-Geyser-Floodgate) test covers every updater-managed plugin. → gate 7 (out-of-band).
-- [ ] Each updater-managed plugin's manifest `enabled` value, default state, and expected fresh-volume behavior are recorded separately. → gate 7.
-- [ ] Paper, Geyser, Floodgate, and ViaVersion start successfully together. → gate 7.
-- [ ] Affected commands, permissions, persistence, and configuration reload were exercised over RCON with no server-wide hot reload. → gate 7a runtime verification.
-- [ ] Ollama and Umami unavailable-endpoint tests keep the server and plugins available when applicable. → N/A, none.
+- [ ] Fresh-volume [Legendary Java Minecraft Geyser Floodgate stack](https://github.com/TheRemote/Legendary-Java-Minecraft-Geyser-Floodgate) test covers every updater-managed plugin. → **7b (full-roster matrix), out-of-band — NOT run here and not required for this plugin's release.**
+- [ ] Each updater-managed plugin's manifest `enabled` value, default state, and expected fresh-volume behavior are recorded separately. → 7b, out-of-band.
+- [x] Paper, Geyser, Floodgate, and ViaVersion start successfully together. → **7a:** fresh disposable Legendary stack booted with `redstone-train-0.1.0.jar`; RCON `plugins` listed `floodgate`, `Geyser-Spigot`, `RedstoneTrain (0.1.0)`, `ViaVersion` all green; Paper `Done (16.7s)`, Java port served protocol 775.
+- [x] Affected commands, permissions, persistence, and configuration reload were exercised over RCON with no server-wide hot reload. → **7a:** `/redstonetrain reload` (plugin's own reload, re-wired services cleanly), `info` (graceful non-player message), no-arg usage, and `rtrain` alias all exercised over RCON; enable log "restored 0 trains" confirms the PDC registry-rebuild path ran; logs clean (no exceptions/`org.xpfarm` stack frames/secrets).
+- [x] Ollama and Umami unavailable-endpoint tests keep the server and plugins available when applicable. → N/A, no external integrations.
 
 ## 8. CI/CD
 
