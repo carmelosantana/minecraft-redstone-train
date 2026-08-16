@@ -216,10 +216,10 @@ Runtime verification (7a) proved the plugin loads/enables green, the cross-play 
 
 ## 10. Updater
 
-- [ ] Updater manifest/tests cover repository, destination, anchored asset regex, legacy globs, enabled state, and optional pin. → gate 10.
-- [ ] Fresh install, upgrade, no-op, legacy archival, endpoint failure, and checksum failure behaviors pass. → gate 10.
-- [ ] Updater dry-run uses a disposable directory and never a production plugin directory. → gate 10.
-- [ ] Failure retains the installed JAR and default fail-open behavior permits Minecraft startup. → gate 10.
+- [x] Updater manifest/tests cover repository, destination, anchored asset regex, legacy globs, enabled state, and optional pin. → `plugins.json` entry: repo `carmelosantana/minecraft-redstone-train`, destination `redstone-train.jar` (unique), regex `^redstone-train-[0-9].*\.jar$` (anchored, digit-pinned), legacy glob `redstone-train-[0-9]*.jar`, default-enabled, no pin. JSON valid; 11/11 unit tests pass. Updater commit `c840503`.
+- [x] Fresh install, upgrade, no-op, legacy archival, endpoint failure, and checksum failure behaviors pass. → fresh install (`would install v0.1.0`), real install (`installed v0.1.0`), no-op (`already current`), replacement (old JAR backed up), legacy archival (`redstone-train-0.0.9.jar` → backups) all exercised in a sandbox; endpoint/download/checksum-failure + fail-open behaviors covered by the updater unit suite (incl. `test_bad_checksum_preserves_installed_jar`).
+- [x] Updater dry-run uses a disposable directory and never a production plugin directory. → `/tmp/…` sandboxes only; `--plugins-dir`/`--state-file`/`--backup-dir` all pointed inside the sandbox; sandboxes discarded after.
+- [x] Failure retains the installed JAR and default fail-open behavior permits Minecraft startup. → verified by `test_bad_checksum_preserves_installed_jar`; per-plugin failure warns and continues (fail-open) without aborting the batch.
 
 ## 11. Deployment
 
