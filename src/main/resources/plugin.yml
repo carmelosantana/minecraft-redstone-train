@@ -9,7 +9,7 @@ description: Craftable self-propelled electric locomotive that couples vanilla m
 commands:
   redstonetrain:
     description: Inspect and manage Redstone Train locomotives
-    usage: /redstonetrain <info | reload>
+    usage: /redstonetrain <info | reload | give <player> <locomotive|wrench> [amount]>
     aliases: [rtrain]
 
 permissions:
@@ -17,5 +17,5 @@ permissions:
     description: Craft, place, ride, couple, and inspect Redstone Train locomotives
     default: true
   redstonetrain.admin:
-    description: Reload the RedstoneTrain configuration
+    description: Reload the RedstoneTrain configuration and give RedstoneTrain items
     default: op

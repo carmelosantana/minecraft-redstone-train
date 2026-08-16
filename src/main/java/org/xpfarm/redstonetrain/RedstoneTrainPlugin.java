@@ -117,7 +117,7 @@ public final class RedstoneTrainPlugin extends JavaPlugin {
         PluginCommand command = Objects.requireNonNull(getCommand("redstonetrain"),
                 "plugin.yml must declare the redstonetrain command");
         RedstoneTrainCommand executor = new RedstoneTrainCommand(
-                registry, () -> Objects.requireNonNull(config), this::reloadRtConfig);
+                registry, () -> Objects.requireNonNull(config), this::reloadRtConfig, items);
         command.setExecutor(executor);
         command.setTabCompleter(executor);
 

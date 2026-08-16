@@ -12,6 +12,7 @@ package org.xpfarm.redstonetrain.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.InvocationHandler;
@@ -27,6 +28,8 @@ import net.kyori.adventure.text.TextComponent;
 import org.bukkit.command.CommandSender;
 import org.junit.jupiter.api.Test;
 import org.xpfarm.redstonetrain.config.RtConfig;
+import org.xpfarm.redstonetrain.item.HeadlessKeys;
+import org.xpfarm.redstonetrain.item.RtItems;
 import org.xpfarm.redstonetrain.train.TrainRegistry;
 
 /**
@@ -128,7 +131,8 @@ final class RedstoneTrainCommandTest {
 
     private static RedstoneTrainCommand command(RtConfig cfg,
                                                 RedstoneTrainCommand.ConfigReloader reloader) {
-        return new RedstoneTrainCommand(new TrainRegistry(), () -> cfg, reloader);
+        return new RedstoneTrainCommand(new TrainRegistry(), () -> cfg, reloader,
+                new RtItems(HeadlessKeys.create()));
     }
 
     private static RedstoneTrainCommand command() {
@@ -212,14 +216,89 @@ final class RedstoneTrainCommandTest {
         assertTrue(sender.anyMessageContains("player"), () -> sender.messages.toString());
     }
 
+    // ------------------------------------------------------------------- give
+
+    @Test
+    void giveWithoutAdminPermissionIsDenied() {
+        StubSender sender = new StubSender("redstonetrain.use");
+        command().route(sender.proxy(), new String[] {"give", "Steve", "wrench"});
+        assertTrue(sender.anyMessageContains("permission"), () -> sender.messages.toString());
+    }
+
+    @Test
+    void giveWithMissingArgumentsShowsGiveUsage() {
+        StubSender sender = new StubSender("redstonetrain.admin");
+        command().route(sender.proxy(), new String[] {"give"});
+        assertTrue(sender.anyMessageContains("Usage: /redstonetrain give"),
+                () -> sender.messages.toString());
+
+        StubSender partial = new StubSender("redstonetrain.admin");
+        command().route(partial.proxy(), new String[] {"give", "Steve"});
+        assertTrue(partial.anyMessageContains("Usage: /redstonetrain give"),
+                () -> partial.messages.toString());
+    }
+
+    @Test
+    void giveWithUnknownItemListsValidTypes() {
+        StubSender sender = new StubSender("redstonetrain.admin");
+        command().route(sender.proxy(), new String[] {"give", "Steve", "minecart"});
+        assertTrue(sender.anyMessageContains("locomotive"), () -> sender.messages.toString());
+        assertTrue(sender.anyMessageContains("wrench"), () -> sender.messages.toString());
+    }
+
+    @Test
+    void giveWithNonIntegerAmountShowsUsageError() {
+        StubSender sender = new StubSender("redstonetrain.admin");
+        command().route(sender.proxy(), new String[] {"give", "Steve", "wrench", "abc"});
+        assertTrue(sender.anyMessageContains("whole number"), () -> sender.messages.toString());
+    }
+
+    @Test
+    void parseAmountDefaultsClampsAndRejects() {
+        assertEquals(1, RedstoneTrainCommand.parseAmount(null), "absent -> default 1");
+        assertEquals(1, RedstoneTrainCommand.parseAmount(""), "empty -> default 1");
+        assertEquals(1, RedstoneTrainCommand.parseAmount("0"), "0 clamps up to 1");
+        assertEquals(1, RedstoneTrainCommand.parseAmount("-5"), "negative clamps up to 1");
+        assertEquals(1, RedstoneTrainCommand.parseAmount("1"));
+        assertEquals(32, RedstoneTrainCommand.parseAmount("32"));
+        assertEquals(64, RedstoneTrainCommand.parseAmount("64"));
+        assertEquals(64, RedstoneTrainCommand.parseAmount("100"), "over-cap clamps down to 64");
+        assertEquals(RedstoneTrainCommand.AMOUNT_INVALID,
+                RedstoneTrainCommand.parseAmount("abc"), "non-integer signals an error");
+        assertEquals(RedstoneTrainCommand.AMOUNT_INVALID,
+                RedstoneTrainCommand.parseAmount("1.5"), "decimals signal an error");
+    }
+
+    @Test
+    void clampAmountBoundsToOneThroughSixtyFour() {
+        assertEquals(1, RedstoneTrainCommand.clampAmount(Integer.MIN_VALUE));
+        assertEquals(1, RedstoneTrainCommand.clampAmount(0));
+        assertEquals(1, RedstoneTrainCommand.clampAmount(1));
+        assertEquals(64, RedstoneTrainCommand.clampAmount(64));
+        assertEquals(64, RedstoneTrainCommand.clampAmount(Integer.MAX_VALUE));
+    }
+
+    @Test
+    void giveItemResolvesCaseInsensitivelyAndRejectsUnknown() {
+        assertEquals(RedstoneTrainCommand.GiveItem.LOCOMOTIVE,
+                RedstoneTrainCommand.GiveItem.resolve("locomotive"));
+        assertEquals(RedstoneTrainCommand.GiveItem.WRENCH,
+                RedstoneTrainCommand.GiveItem.resolve("WRENCH"));
+        assertEquals(RedstoneTrainCommand.GiveItem.LOCOMOTIVE,
+                RedstoneTrainCommand.GiveItem.resolve("Locomotive"));
+        assertNull(RedstoneTrainCommand.GiveItem.resolve("minecart"));
+        assertNull(RedstoneTrainCommand.GiveItem.resolve(""));
+    }
+
     // --------------------------------------------------------- tab completion
 
     @Test
     void completionOffersOnlyPermittedSubcommands() {
-        assertEquals(List.of("info", "reload"),
+        assertEquals(List.of("info", "give", "reload"),
                 RedstoneTrainCommand.complete("", true, true));
         assertEquals(List.of("info"), RedstoneTrainCommand.complete("", true, false));
-        assertEquals(List.of("reload"), RedstoneTrainCommand.complete("", false, true));
+        assertEquals(List.of("give", "reload"),
+                RedstoneTrainCommand.complete("", false, true));
         assertEquals(List.of(), RedstoneTrainCommand.complete("", false, false));
     }
 
@@ -227,6 +306,16 @@ final class RedstoneTrainCommandTest {
     void completionFiltersByPrefixCaseInsensitively() {
         assertEquals(List.of("reload"), RedstoneTrainCommand.complete("RE", true, true));
         assertEquals(List.of("info"), RedstoneTrainCommand.complete("in", true, true));
+        assertEquals(List.of("give"), RedstoneTrainCommand.complete("G", true, true));
         assertEquals(List.of(), RedstoneTrainCommand.complete("x", true, true));
+    }
+
+    @Test
+    void giveItemCompletionFiltersByPrefix() {
+        assertEquals(List.of("locomotive", "wrench"),
+                RedstoneTrainCommand.completeGiveItems(""));
+        assertEquals(List.of("locomotive"), RedstoneTrainCommand.completeGiveItems("LOC"));
+        assertEquals(List.of("wrench"), RedstoneTrainCommand.completeGiveItems("w"));
+        assertEquals(List.of(), RedstoneTrainCommand.completeGiveItems("x"));
     }
 }
